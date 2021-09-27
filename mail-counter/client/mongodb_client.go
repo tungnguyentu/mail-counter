@@ -23,15 +23,15 @@ var (
 )
 
 type MailLog struct {
-	QueueId             string    `bson:"QueueId"`
-	From                string    `bson:"from"`
-	To                  string    `bson:"to"`
-	MessageId           string    `bson:"MessageId"`
-	RecipientSmtpIp     string    `bson:"RecipientSmtpIp"`
-	RecipientSmtpDomain string    `bson:"RecipientSmtpDomain"`
-	Status              string    `bson:"status"`
-	Message             string    `bson:"message"`
-	SentAt              time.Time `bson:"SentAt"`
+	QueueId      string    `bson:"QueueId"`
+	From         string    `bson:"From"`
+	To           string    `bson:"To"`
+	DomainFrom   string    `bson:"DomainFrom"`
+	DomainTo     string    `bson:"DomainTo"`
+	MessageId    string    `bson:"MessageId"`
+	SenderSmtpIp string    `bson:"SenderSmtpIp"`
+	Status       string    `bson:"Status"`
+	SentAt       time.Time `bson:"SentAt"`
 }
 
 func ConvertToTimeMST(timeStr string) time.Time {

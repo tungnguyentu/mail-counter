@@ -13,17 +13,12 @@ import (
 )
 
 func FilterLog(message string) bool {
-	if strings.Contains(message, "capt-se") {
-		if strings.Contains(message, "postfix/qmgr") &&
-			strings.Contains(message, "from=") ||
-			strings.Contains(message, "postfix/cleanup") &&
-				strings.Contains(message, "message-id") ||
-			strings.Contains(message, "postfix/smtp") &&
-				strings.Contains(message, "status=bounced") {
-			return true
-		}
+	if strings.Contains(message, "Passed CLEAN") &&
+		strings.Contains(message, "Message-ID") ||
+		strings.Contains(message, "postfix/lmtp") &&
+			strings.Contains(message, "status=sent") {
+		return true
 	}
-
 	return false
 }
 
@@ -43,53 +38,63 @@ func ConvertToTimeUTC(timeStr string) time.Time {
 	return timeParse
 }
 
+func ExtractEmail(email string) (string, string) {
+	atSign := strings.Index(email, "@")
+	return email[:atSign], email[atSign+1:]
+}
+
 func CollectField(rawMessageStr string) (client.MailLog, error) {
-	mail_log := client.MailLog{}
+	mailLog := client.MailLog{}
 	mapping := Dump(rawMessageStr)
 	rawMessage := fmt.Sprintf("%v\n", mapping["message"])
-	logrus.Info("Message: ", rawMessage)
+	logrus.Info("\nMessage: ", rawMessage)
 	timestamp := fmt.Sprintf("%v\n", mapping["@timestamp"])
 	index := strings.Index(rawMessage, "]:")
-	statusMessageIndex := strings.Index(rawMessage, "(")
-	if statusMessageIndex == -1 {
-		statusMessageIndex = len(rawMessage) - 1
-	}
-	message := strings.TrimSpace(rawMessage[index+2 : statusMessageIndex])
+	message := strings.TrimSpace(rawMessage[index+2:])
 	fields := strings.Split(message, " ")
 	re := regexp.MustCompile(`=`)
+	if strings.Contains(rawMessage, "amavis") {
+		fields = strings.Split(message, ",")
+		re = regexp.MustCompile(`:`)
+	}
 	queueId := strings.Trim(strings.Replace(string(fields[0]), ":", "", 1), "")
-	for _, field := range fields[1:] {
+	for _, field := range fields {
 		items := re.Split(field, 2)
 		if len(items) <= 1 {
 			continue
 		}
-		raw_key, raw_value := strings.Trim(items[0], " "), strings.Trim(items[1], " ")
-		key := strings.Title(raw_key)
-		value := strings.Replace(raw_value, ",", " ", 1)
-		switch key {
-		case "From":
-			mail_log.From = value
-		case "To":
-			mail_log.To = value
-		case "Message-Id":
-			mail_log.MessageId = value
-		case "Relay":
-			open_char := strings.Index(value, "[")
-			close_char := strings.Index(value, "]")
-			if open_char == -1 || close_char == -1 {
+		rawKey, rawValue := strings.Trim(items[0], " "), strings.Trim(items[1], " ")
+		key := strings.Title(rawKey)
+		value := strings.Replace(rawValue, ",", " ", 1)
+		switch {
+		case key == "Queued_as":
+			queueId = value
+		case key == "Message-ID":
+			mailLog.MessageId = value
+			mailLog.SentAt = ConvertToTimeUTC(strings.Trim(timestamp, "\n"))
+		case strings.Contains(key, "["):
+			mailLog.SenderSmtpIp = key
+			i := strings.Index(value, "<")
+			emails := strings.Split(value[i:], "->")
+			emailFrom := strings.Replace(strings.Replace(emails[0], "<", "", 1), ">", "", 1)
+			emailTo := strings.Replace(strings.Replace(emails[1], "<", "", 1), ">", "", 1)
+			if emailFrom == " " || emailTo == " " {
 				continue
 			}
-			mail_log.RecipientSmtpDomain = value[:open_char]
-			mail_log.RecipientSmtpIp = value[open_char+1 : close_char]
-		case "Status":
-			mail_log.SentAt = ConvertToTimeUTC(strings.Trim(timestamp, "\n"))
-			status_message := rawMessage[statusMessageIndex:]
-			mail_log.Status = value
-			mail_log.Message = status_message
+			_, domainFrom := ExtractEmail(emailFrom)
+			_, domainTo := ExtractEmail(emailTo)
+			mailLog.From = emailFrom
+			mailLog.To = emailTo
+			mailLog.DomainFrom = domainFrom
+			mailLog.DomainTo = domainTo
+		case key == "Status":
+			mailLog.Status = value
+		case key == "To":
+			mailLog.To = strings.Replace(strings.Replace(value, "<", "", 1), ">", "", 1)
 		}
 	}
-	mail_log.QueueId = queueId
-	return mail_log, nil
+	mailLog.QueueId = queueId
+	return mailLog, nil
 }
 
 func AggregateLog(mailLog client.MailLog) {
@@ -139,7 +144,7 @@ func Counter(duration int) (time.Time, int) {
 	counter := 0
 	result := GetBounceMail(from, to)
 	for _, value := range result {
-		isSpam := DetectSpam(value.Message)
+		isSpam := DetectSpam(value.From)
 		if isSpam {
 			counter += 1
 		}
