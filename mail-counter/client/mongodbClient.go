@@ -1,0 +1,145 @@
+package client
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"github.com/Tungnt24/mail-counter/mail_counter"
+	"go.mongodb.org/mongo-driver/bson"
+	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
+)
+
+var clientInstance *mongo.Client
+var clientInstanceError error
+var mongoOnce sync.Once
+
+var (
+	CONNECTIONSTRING = mailcounter.Load().MongoUri
+	DB               = mailcounter.Load().MongoDataBase
+	MailLogs         = mailcounter.Load().MongoCollection
+)
+
+type MailLog struct {
+	QueueId             string    `bson:"QueueId"`
+	From                string    `bson:"from"`
+	To                  string    `bson:"to"`
+	MessageId           string    `bson:"MessageId"`
+	RecipientSmtpIp     string    `bson:"RecipientSmtpIp"`
+	RecipientSmtpDomain string    `bson:"RecipientSmtpDomain"`
+	Status              string    `bson:"status"`
+	Message             string    `bson:"message"`
+	SentAt              time.Time `bson:"SentAt"`
+}
+
+func ConvertToTimeMST(timeStr string) time.Time {
+	layout := "2006-01-02 15:04:05 -0700 MST"
+	timeParse, _ := time.Parse(layout, timeStr)
+	return timeParse
+}
+
+func GetMongoClient() (*mongo.Client, error) {
+	mongoOnce.Do(func() {
+		clientOptions := options.Client().ApplyURI(CONNECTIONSTRING)
+		client, err := mongo.Connect(context.TODO(), clientOptions)
+		if err != nil {
+			clientInstanceError = err
+		}
+		err = client.Ping(context.TODO(), nil)
+		if err != nil {
+			clientInstanceError = err
+		}
+		clientInstance = client
+	})
+	return clientInstance, clientInstanceError
+}
+func CreateLog(task MailLog) error {
+	client, err := GetMongoClient()
+	if err != nil {
+		return err
+	}
+	collection := client.Database(DB).Collection(MailLogs)
+	_, err = collection.InsertOne(context.TODO(), task)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetManyLogs(key string, value string, fromDate time.Time, toDate time.Time) ([]MailLog, error) {
+	filter := bson.M{
+		"sent_at": bson.M{
+			"$gte": primitive.NewDateTimeFromTime(fromDate),
+			"$lt":  primitive.NewDateTimeFromTime(toDate),
+		},
+		key: value,
+	}
+	mailLog := []MailLog{}
+
+	client, err := GetMongoClient()
+	if err != nil {
+		return mailLog, err
+	}
+	collection := client.Database(DB).Collection(MailLogs)
+
+	cur, err := collection.Find(context.TODO(), filter)
+	if err != nil {
+		return mailLog, err
+	}
+
+	for cur.Next(context.TODO()) {
+		t := MailLog{}
+		err := cur.Decode(&t)
+		if err != nil {
+			return mailLog, err
+		}
+		mailLog = append(mailLog, t)
+	}
+
+	cur.Close(context.TODO())
+	if len(mailLog) == 0 {
+		return mailLog, mongo.ErrNoDocuments
+	}
+	return mailLog, nil
+}
+
+func UpdateLog(queueId string, key string, value string) error {
+	filter := bson.D{primitive.E{Key: "queueId", Value: queueId}}
+	updater := bson.D{primitive.E{Key: "$set", Value: bson.D{
+		primitive.E{Key: key, Value: value},
+	}}}
+	if key == "sentAt" {
+		updater = bson.D{primitive.E{Key: "$set", Value: bson.D{
+			primitive.E{Key: key, Value: ConvertToTimeMST(value)},
+		}}}
+	}
+
+	client, err := GetMongoClient()
+	if err != nil {
+		return err
+	}
+	collection := client.Database(DB).Collection(MailLogs)
+
+	_, err = collection.UpdateOne(context.TODO(), filter, updater)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func GetLogByQueueId(queueId string) (MailLog, error) {
+	result := MailLog{}
+	filter := bson.D{primitive.E{Key: "queue_id", Value: queueId}}
+	client, err := GetMongoClient()
+	if err != nil {
+		return result, err
+	}
+	collection := client.Database(DB).Collection(MailLogs)
+	err = collection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		return result, err
+	}
+	return result, nil
+}
