@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Tungnt24/mail-counter/mail_counter"
+	mailcounter "github.com/Tungnt24/mail-counter/mail-counter"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"

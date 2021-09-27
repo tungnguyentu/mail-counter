@@ -10,8 +10,8 @@ import (
 	"syscall"
 
 	"github.com/Shopify/sarama"
-	mailcounter "github.com/Tungnt24/mail-counter/mail_counter"
-	"github.com/Tungnt24/mail-counter/mail_counter/utils"
+	mailcounter "github.com/Tungnt24/mail-counter/mail-counter"
+	"github.com/Tungnt24/mail-counter/mail-counter/utils"
 	"github.com/sirupsen/logrus"
 )
 

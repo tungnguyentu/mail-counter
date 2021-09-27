@@ -6,7 +6,7 @@ import (
 	"io/ioutil"
 	"net/http"
 
-	mailcounter "github.com/Tungnt24/mail-counter/mail_counter"
+	mailcounter "github.com/Tungnt24/mail-counter/mail-counter"
 )
 
 func SendTele(message []byte) []byte {

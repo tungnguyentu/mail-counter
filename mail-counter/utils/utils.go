@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/Tungnt24/mail-counter/mail_counter/client"
+	"github.com/Tungnt24/mail-counter/mail-counter/client"
 	"github.com/sirupsen/logrus"
 )
 
