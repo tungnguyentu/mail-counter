@@ -70,7 +70,7 @@ func CreateLog(task MailLog) error {
 
 func GetManyLogs(key string, value string, fromDate time.Time, toDate time.Time) ([]MailLog, error) {
 	filter := bson.M{
-		"sent_at": bson.M{
+		"SentAt": bson.M{
 			"$gte": primitive.NewDateTimeFromTime(fromDate),
 			"$lt":  primitive.NewDateTimeFromTime(toDate),
 		},
@@ -105,12 +105,15 @@ func GetManyLogs(key string, value string, fromDate time.Time, toDate time.Time)
 	return mailLog, nil
 }
 
-func UpdateLog(queueId string, key string, value string) error {
-	filter := bson.D{primitive.E{Key: "queueId", Value: queueId}}
+func UpdateLog(queueId string, to string, key string, value string) error {
+	filter := bson.D{
+		primitive.E{Key: "QueueId", Value: queueId},
+		primitive.E{Key: "To", Value: to},
+	}
 	updater := bson.D{primitive.E{Key: "$set", Value: bson.D{
 		primitive.E{Key: key, Value: value},
 	}}}
-	if key == "sentAt" {
+	if key == "sentat" {
 		updater = bson.D{primitive.E{Key: "$set", Value: bson.D{
 			primitive.E{Key: key, Value: ConvertToTimeMST(value)},
 		}}}
@@ -129,9 +132,24 @@ func UpdateLog(queueId string, key string, value string) error {
 	return nil
 }
 
-func GetLogByQueueId(queueId string) (MailLog, error) {
+func GetLog(key string, value string) (MailLog, error) {
 	result := MailLog{}
-	filter := bson.D{primitive.E{Key: "queue_id", Value: queueId}}
+	filter := bson.D{primitive.E{Key: key, Value: value}}
+	client, err := GetMongoClient()
+	if err != nil {
+		return result, err
+	}
+	collection := client.Database(DB).Collection(MailLogs)
+	err = collection.FindOne(context.TODO(), filter).Decode(&result)
+	if err != nil {
+		return result, err
+	}
+	return result, nil
+}
+
+func GetLogs(key1 string, value1 string, key2 string, value2 string) (MailLog, error) {
+	result := MailLog{}
+	filter := bson.D{primitive.E{Key: key1, Value: value2}, primitive.E{Key: key2, Value: value2}}
 	client, err := GetMongoClient()
 	if err != nil {
 		return result, err

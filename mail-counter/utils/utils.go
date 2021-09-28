@@ -65,7 +65,7 @@ func CollectField(rawMessageStr string) (client.MailLog, error) {
 		}
 		rawKey, rawValue := strings.Trim(items[0], " "), strings.Trim(items[1], " ")
 		key := strings.Title(rawKey)
-		value := strings.Replace(rawValue, ",", " ", 1)
+		value := strings.Trim(strings.Replace(rawValue, ",", " ", 1), " ")
 		switch {
 		case key == "Queued_as":
 			queueId = value
@@ -83,8 +83,8 @@ func CollectField(rawMessageStr string) (client.MailLog, error) {
 			}
 			_, domainFrom := ExtractEmail(emailFrom)
 			_, domainTo := ExtractEmail(emailTo)
-			mailLog.From = emailFrom
-			mailLog.To = emailTo
+			mailLog.From = strings.Trim(emailFrom, " ")
+			mailLog.To = strings.Trim(emailTo, " ")
 			mailLog.DomainFrom = domainFrom
 			mailLog.DomainTo = domainTo
 		case key == "Status":
@@ -100,7 +100,7 @@ func CollectField(rawMessageStr string) (client.MailLog, error) {
 func AggregateLog(mailLog client.MailLog) {
 	v := reflect.ValueOf(mailLog)
 	typeOfS := v.Type()
-	result, _ := client.GetLogByQueueId(mailLog.QueueId)
+	result, _ := client.GetLogs("QueueId", mailLog.QueueId, "To", mailLog.To)
 	if result != (client.MailLog{}) {
 		for i := 1; i < v.NumField(); i++ {
 			key := strings.ToLower(typeOfS.Field(i).Name)
@@ -108,7 +108,7 @@ func AggregateLog(mailLog client.MailLog) {
 			if value == "" || value == "0001-01-01 00:00:00 +0000 UTC" {
 				continue
 			}
-			client.UpdateLog(mailLog.QueueId, key, value)
+			client.UpdateLog(mailLog.QueueId, mailLog.To, key, value)
 		}
 	} else {
 		client.CreateLog(mailLog)
