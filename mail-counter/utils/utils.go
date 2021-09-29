@@ -90,7 +90,7 @@ func CollectField(rawMessageStr string) (client.MailLog, error) {
 		case key == "Status":
 			mailLog.Status = value
 		case key == "To":
-			mailLog.To = strings.Replace(strings.Replace(value, "<", "", 1), ">", "", 1)
+			mailLog.To = strings.Trim(strings.Replace(strings.Replace(value, "<", "", 1), ">", "", 1), " ")
 		}
 	}
 	mailLog.QueueId = queueId
@@ -100,10 +100,10 @@ func CollectField(rawMessageStr string) (client.MailLog, error) {
 func AggregateLog(mailLog client.MailLog) {
 	v := reflect.ValueOf(mailLog)
 	typeOfS := v.Type()
-	result, _ := client.GetLogs("QueueId", mailLog.QueueId, "To", mailLog.To)
+	result, _ := client.GetLogs("QueueId", mailLog.QueueId)
 	if result != (client.MailLog{}) {
 		for i := 1; i < v.NumField(); i++ {
-			key := strings.ToLower(typeOfS.Field(i).Name)
+			key := typeOfS.Field(i).Name
 			value := fmt.Sprintf("%v", v.Field(i).Interface())
 			if value == "" || value == "0001-01-01 00:00:00 +0000 UTC" {
 				continue
@@ -122,13 +122,6 @@ func DetectSpam(message string) bool {
 	return match
 }
 
-func GetBounceMail(fromDatetime time.Time, toDatetime time.Time) []client.MailLog {
-	key := "status"
-	value := "bounced"
-	result, _ := client.GetManyLogs(key, value, fromDatetime, toDatetime)
-	return result
-}
-
 func GetTime(duration int) (time.Time, time.Time) {
 	loc, _ := time.LoadLocation("UTC")
 	now := time.Now().In(loc)
@@ -137,17 +130,4 @@ func GetTime(duration int) (time.Time, time.Time) {
 	toDatetime := ConvertToTimeUTC(nowUtcStr)
 	fromDatetime := ConvertToTimeUTC(thenStr)
 	return fromDatetime, toDatetime
-}
-
-func Counter(duration int) (time.Time, int) {
-	from, to := GetTime(duration)
-	counter := 0
-	result := GetBounceMail(from, to)
-	for _, value := range result {
-		isSpam := DetectSpam(value.From)
-		if isSpam {
-			counter += 1
-		}
-	}
-	return from, counter
 }

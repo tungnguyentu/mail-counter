@@ -108,12 +108,11 @@ func GetManyLogs(key string, value string, fromDate time.Time, toDate time.Time)
 func UpdateLog(queueId string, to string, key string, value string) error {
 	filter := bson.D{
 		primitive.E{Key: "QueueId", Value: queueId},
-		primitive.E{Key: "To", Value: to},
 	}
 	updater := bson.D{primitive.E{Key: "$set", Value: bson.D{
 		primitive.E{Key: key, Value: value},
 	}}}
-	if key == "sentat" {
+	if key == "SentAt" {
 		updater = bson.D{primitive.E{Key: "$set", Value: bson.D{
 			primitive.E{Key: key, Value: ConvertToTimeMST(value)},
 		}}}
@@ -147,9 +146,14 @@ func GetLog(key string, value string) (MailLog, error) {
 	return result, nil
 }
 
-func GetLogs(key1 string, value1 string, key2 string, value2 string) (MailLog, error) {
+func GetLogs(key string, value string) (MailLog, error) {
 	result := MailLog{}
-	filter := bson.D{primitive.E{Key: key1, Value: value2}, primitive.E{Key: key2, Value: value2}}
+	filter := bson.D{
+		primitive.E{
+			Key:   key,
+			Value: value,
+		},
+	}
 	client, err := GetMongoClient()
 	if err != nil {
 		return result, err
